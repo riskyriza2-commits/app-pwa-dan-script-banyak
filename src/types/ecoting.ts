@@ -78,11 +78,19 @@ export interface Withdrawal {
   t: string;
 }
 
+export interface TopupRecord {
+  u: string;
+  metode: string;
+  n: number;
+  t: string;
+}
+
 export interface EcotingDB {
   users: User[];
   orders: Order[];
   session: string | null;
   wd: Withdrawal[];
+  topups?: TopupRecord[];
 }
 
 export interface LedgerEntry {

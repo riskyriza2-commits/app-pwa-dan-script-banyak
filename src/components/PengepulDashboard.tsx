@@ -7,6 +7,8 @@ import {
   Wallet,
   Truck,
   Footprints,
+  PlusCircle,
+  MapPin,
 } from 'lucide-react';
 import type {
   DeliverySettings,
@@ -14,6 +16,7 @@ import type {
   LedgerEntry,
   Order,
   PengepulRatingRecord,
+  TopupRecord,
   User,
 } from '../types/ecoting';
 import {
@@ -30,14 +33,40 @@ import {
 import { DrawerModal } from './DrawerModal';
 import { OrderCard } from './OrderCard';
 
+const TOPUP_METHODS = [
+  'QRIS',
+  'Transfer BCA',
+  'Transfer BRI',
+  'Transfer Mandiri',
+  'Transfer BNI',
+  'DANA',
+  'GoPay',
+  'OVO',
+] as const;
+
+const TOPUP_PRESETS = [50000, 100000, 250000, 500000] as const;
+
 interface PengepulDashboardProps {
   user: User;
   users: User[];
   orders: Order[];
   ratings?: PengepulRatingRecord[];
-  activeModal: 'none' | 'kelola' | 'pengiriman' | 'buku' | 'verifikasi';
+  topups?: TopupRecord[];
+  activeModal:
+    | 'none'
+    | 'kelola'
+    | 'pengiriman'
+    | 'isiSaldo'
+    | 'buku'
+    | 'verifikasi';
   setActiveModal: (
-    modal: 'none' | 'kelola' | 'pengiriman' | 'buku' | 'verifikasi',
+    modal:
+      | 'none'
+      | 'kelola'
+      | 'pengiriman'
+      | 'isiSaldo'
+      | 'buku'
+      | 'verifikasi',
   ) => void;
   verifyingOrderId: number | null;
   setVerifyingOrderId: (id: number | null) => void;
@@ -45,6 +74,7 @@ interface PengepulDashboardProps {
   onOpenReceipt: (orderId: number) => void;
   onSavePrices: (newPrices: number[]) => void;
   onSaveDeliverySettings: (settings: DeliverySettings) => void;
+  onTopupSaldo: (amount: number, metode: string) => void | Promise<void>;
   onApproveOrder: (orderId: number, finalWeight: number) => void;
   onRejectOrder: (orderId: number) => void;
   onToast: (msg: string) => void;
@@ -64,6 +94,7 @@ export const PengepulDashboard: React.FC<PengepulDashboardProps> = ({
   users,
   orders,
   ratings,
+  topups = [],
   activeModal,
   setActiveModal,
   verifyingOrderId,
@@ -72,6 +103,7 @@ export const PengepulDashboard: React.FC<PengepulDashboardProps> = ({
   onOpenReceipt,
   onSavePrices,
   onSaveDeliverySettings,
+  onTopupSaldo,
   onApproveOrder,
   onRejectOrder,
   onToast,
@@ -131,6 +163,11 @@ export const PengepulDashboard: React.FC<PengepulDashboardProps> = ({
     }
   }, [activeModal, user]);
 
+  // Isi Saldo state
+  const [topupAmount, setTopupAmount] = useState('100000');
+  const [topupMethod, setTopupMethod] = useState<string>('QRIS');
+  const [topupSubmitting, setTopupSubmitting] = useState(false);
+
   // Verifikasi single order
   const verifyingOrder = useMemo(
     () => orders.find((o) => o.id === verifyingOrderId) || null,
@@ -143,6 +180,19 @@ export const PengepulDashboard: React.FC<PengepulDashboardProps> = ({
       setWeighedKg(String(verifyingOrder.berat));
     }
   }, [verifyingOrder]);
+
+  const netPayForVerifying = useMemo(() => {
+    if (!verifyingOrder) return 0;
+    const weight = parseFloat(weighedKg) || 0;
+    return Math.max(
+      0,
+      weight * getOrderUnitPrice(verifyingOrder) - verifyingOrder.ongkir,
+    );
+  }, [verifyingOrder, weighedKg]);
+
+  const insufficientBalance = verifyingOrder
+    ? netPayForVerifying > user.saldo
+    : false;
 
   const [ledgerTab, setLedgerTab] = useState<LedgerAccountKey>('Persediaan');
 
@@ -245,11 +295,36 @@ export const PengepulDashboard: React.FC<PengepulDashboardProps> = ({
     onToast('Opsi pengiriman berhasil disimpan');
   };
 
+  const handleConfirmTopup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const nominal = Math.round(Number(topupAmount) || 0);
+    if (nominal < 10000) {
+      onToast('Minimal isi saldo Rp10.000');
+      return;
+    }
+    if (nominal > 100000000) {
+      onToast('Maksimal isi saldo Rp100.000.000 per transaksi');
+      return;
+    }
+    if (topupSubmitting) return;
+    setTopupSubmitting(true);
+    try {
+      await onTopupSaldo(nominal, topupMethod);
+      setActiveModal('none');
+    } finally {
+      setTopupSubmitting(false);
+    }
+  };
+
   const handleApprove = () => {
     if (!verifyingOrder) return;
     const weight = parseFloat(weighedKg);
     if (!(weight > 0)) {
       onToast('Isi berat hasil timbang');
+      return;
+    }
+    if (netPayForVerifying > user.saldo) {
+      onToast('Saldo Eco-Pay belum cukup. Silakan isi saldo terlebih dahulu.');
       return;
     }
     onApproveOrder(verifyingOrder.id, weight);
@@ -286,7 +361,7 @@ export const PengepulDashboard: React.FC<PengepulDashboardProps> = ({
         {/* Top Saldo / Business Card matching Figma */}
         <div className="rounded-2xl bg-[#eef3ed] dark:bg-[#1b3121] border border-[#c8dac6] dark:border-[#2d4d35] p-4 md:p-5 shadow-xs">
           <div className="flex items-start justify-between gap-3">
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-semibold text-[#2e5233] dark:text-[#9fc2a7]">
                 {getDisplayName(user)} ·{' '}
                 <span className="inline-flex items-center gap-1">
@@ -296,12 +371,15 @@ export const PengepulDashboard: React.FC<PengepulDashboardProps> = ({
                   </span>
                 </span>
               </p>
-              <p className="text-[11px] text-[#4b6e50] dark:text-[#8eb096] mt-2">
-                Total Pembelian Sampah
+              <p className="text-[11px] font-semibold text-[#4b6e50] dark:text-[#8eb096] mt-2">
+                Saldo Eco-Pay
               </p>
               <h1 className="font-mono-num text-2xl md:text-3xl font-extrabold text-[#0c2612] dark:text-white mt-0.5">
-                {formatRupiah(totalPaid)}
+                {formatRupiah(user.saldo)}
               </h1>
+              <p className="text-[11px] text-[#4b6e50] dark:text-[#8eb096] mt-1 font-mono-num">
+                Total pembelian: {formatRupiah(totalPaid)}
+              </p>
             </div>
 
             <div className="flex flex-col items-end gap-2 shrink-0">
@@ -312,14 +390,24 @@ export const PengepulDashboard: React.FC<PengepulDashboardProps> = ({
                   className="w-full h-full object-contain"
                 />
               </div>
-              <button
-                type="button"
-                onClick={() => setActiveModal('buku')}
-                className="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-[#15211a] border border-[#6ca068] px-3 py-1 text-[11px] font-bold text-[#102916] dark:text-[#e8f3ec]"
-              >
-                <Wallet className="w-3 h-3 text-[#0f7a35]" />
-                <span>Buku Kas</span>
-              </button>
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveModal('isiSaldo')}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-[#24c23b] hover:bg-[#1ca931] px-3.5 py-1.5 text-[11px] font-extrabold text-white shadow-2xs transition-colors"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  <span>Isi Saldo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveModal('buku')}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-[#15211a] border border-[#6ca068] px-3 py-1.5 text-[11px] font-bold text-[#102916] dark:text-[#e8f3ec]"
+                >
+                  <Wallet className="w-3 h-3 text-[#0f7a35]" />
+                  <span>Buku Kas</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -682,14 +770,19 @@ export const PengepulDashboard: React.FC<PengepulDashboardProps> = ({
       >
         {verifyingOrder && (
           <div className="space-y-4">
-            <div className="text-xs font-medium text-[#1b3d20] dark:text-[#a8c7af] space-y-0.5 px-1">
+            <div className="text-xs font-medium text-[#1b3d20] dark:text-[#a8c7af] space-y-1 px-1">
               <p className="font-bold text-sm text-[#102916] dark:text-white">
                 Dari {getUserDisplayName(users, verifyingOrder.by, verifyingOrder.byName)}
               </p>
               <p>
                 {verifyingOrder.metode} · {verifyingOrder.tgl}
               </p>
-              {verifyingOrder.alamat && <p>{verifyingOrder.alamat}</p>}
+              {verifyingOrder.alamat && (
+                <p className="flex items-start gap-1.5 text-[#102916] dark:text-[#e8f3ec] font-semibold">
+                  <MapPin className="w-3.5 h-3.5 text-[#0f7a35] dark:text-[#6ee7a0] shrink-0 mt-0.5" />
+                  <span>{verifyingOrder.alamat}</span>
+                </p>
+              )}
             </div>
 
             <div className="rounded-3xl border-2 border-[#4d7c49] bg-[#b4dab1]/60 dark:bg-[#192b1f] p-4 space-y-3">
@@ -728,25 +821,46 @@ export const PengepulDashboard: React.FC<PengepulDashboardProps> = ({
               </div>
             </div>
 
-            <div className="rounded-full bg-[#e9f1e8] dark:bg-[#1a2b1f] border border-[#4d7c49] px-4 py-2.5 flex items-center justify-between text-xs font-bold">
-              <span>Dibayar ke pengumpul</span>
-              <span className="font-mono-num text-sm font-extrabold text-[#0f7a35] dark:text-[#6ee7a0]">
-                {formatRupiah(
-                  Math.max(
-                    0,
-                    (parseFloat(weighedKg) || 0) *
-                      getOrderUnitPrice(verifyingOrder) -
-                      verifyingOrder.ongkir,
-                  ),
-                )}
-              </span>
+            <div className="space-y-2">
+              <div className="rounded-full bg-[#e9f1e8] dark:bg-[#1a2b1f] border border-[#4d7c49] px-4 py-2.5 flex items-center justify-between text-xs font-bold">
+                <span>Dibayar ke pengumpul</span>
+                <span className="font-mono-num text-sm font-extrabold text-[#0f7a35] dark:text-[#6ee7a0]">
+                  {formatRupiah(netPayForVerifying)}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between px-2 text-[11px] font-semibold text-[#3a5c3f] dark:text-[#93a89b]">
+                <span>Saldo Eco-Pay Anda</span>
+                <span className="font-mono-num font-bold text-[#102916] dark:text-white">
+                  {formatRupiah(user.saldo)}
+                </span>
+              </div>
+
+              {insufficientBalance && (
+                <div className="rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 p-3 flex items-center justify-between gap-2 text-xs">
+                  <p className="text-amber-900 dark:text-amber-200 font-semibold leading-snug">
+                    Saldo Eco-Pay belum cukup untuk membayar setoran ini.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVerifyingOrderId(null);
+                      setActiveModal('isiSaldo');
+                    }}
+                    className="shrink-0 rounded-full bg-[#24c23b] hover:bg-[#1ca931] text-white px-3 py-1.5 text-[11px] font-extrabold whitespace-nowrap"
+                  >
+                    Isi Saldo
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2.5 pt-1">
               <button
                 type="button"
+                disabled={insufficientBalance}
                 onClick={handleApprove}
-                className="w-full min-h-[44px] rounded-full bg-[#4b8b42] hover:bg-[#3b7533] text-white font-extrabold text-sm transition-colors"
+                className="w-full min-h-[44px] rounded-full bg-[#4b8b42] hover:bg-[#3b7533] disabled:opacity-45 disabled:cursor-not-allowed text-white font-extrabold text-sm transition-colors"
               >
                 Terima &amp; Bayar
               </button>
@@ -760,6 +874,131 @@ export const PengepulDashboard: React.FC<PengepulDashboardProps> = ({
             </div>
           </div>
         )}
+      </DrawerModal>
+
+      {/* Modal: Isi Saldo Eco-Pay */}
+      <DrawerModal
+        open={activeModal === 'isiSaldo'}
+        onClose={() => setActiveModal('none')}
+        title="Isi Saldo Eco-Pay"
+        subtitle="Tambah saldo untuk membayar setoran sampah pengumpul secara langsung."
+        maxWidthClass="md:max-w-md"
+      >
+        <form onSubmit={handleConfirmTopup} className="space-y-4">
+          <div className="rounded-2xl bg-[#e9f1e8] dark:bg-[#1a2b1f] border border-[#5f8f5b]/60 p-3.5 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold text-[#3a5c3f] dark:text-[#93a89b]">
+                Saldo Eco-Pay saat ini
+              </p>
+              <p className="font-mono-num text-xl font-extrabold text-[#102916] dark:text-white mt-0.5">
+                {formatRupiah(user.saldo)}
+              </p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-white dark:bg-[#15211a] border border-[#5f8f5b]/40 flex items-center justify-center text-[#0f7a35] dark:text-[#6ee7a0]">
+              <Wallet className="w-5 h-5" />
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-bold mb-2">Pilih nominal cepat</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {TOPUP_PRESETS.map((preset) => {
+                const isSelected = Number(topupAmount) === preset;
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setTopupAmount(String(preset))}
+                    className={`min-h-[38px] rounded-full px-3 py-1.5 text-xs font-mono-num font-bold border transition-colors ${
+                      isSelected
+                        ? 'bg-[#24c23b] border-[#24c23b] text-white'
+                        : 'bg-[#e9f1e8] dark:bg-[#1a2b1f] border-[#5f8f5b]/50 text-[#102916] dark:text-[#e8f3ec] hover:bg-white dark:hover:bg-[#233d29]'
+                    }`}
+                  >
+                    {formatRupiah(preset)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <label
+              htmlFor="topup-amount-input"
+              className="block text-xs font-bold mb-1.5"
+            >
+              Nominal isi saldo (Rp)
+            </label>
+            <input
+              id="topup-amount-input"
+              type="number"
+              min="10000"
+              max="100000000"
+              step="5000"
+              required
+              value={topupAmount}
+              onChange={(e) => setTopupAmount(e.target.value)}
+              className="w-full min-h-[44px] rounded-full border border-[#4d7c49] bg-[#e9f1e8] dark:bg-[#15211a] px-4 py-2 text-sm font-mono-num font-bold focus:outline-2 focus:outline-[#0f7a35]"
+            />
+            <p className="text-[11px] opacity-75 mt-1 px-1">
+              Minimal Rp10.000 · Maksimal Rp100.000.000 per isi saldo.
+            </p>
+          </div>
+
+          <div>
+            <label
+              htmlFor="topup-method-select"
+              className="block text-xs font-bold mb-1.5"
+            >
+              Metode pembayaran
+            </label>
+            <select
+              id="topup-method-select"
+              value={topupMethod}
+              onChange={(e) => setTopupMethod(e.target.value)}
+              className="w-full min-h-[44px] rounded-full border border-[#4d7c49] bg-[#e9f1e8] dark:bg-[#15211a] px-4 py-2 text-sm font-semibold focus:outline-2 focus:outline-[#0f7a35]"
+            >
+              {TOPUP_METHODS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            type="submit"
+            disabled={topupSubmitting}
+            className="w-full min-h-[44px] rounded-full bg-[#24c23b] hover:bg-[#1ca931] disabled:opacity-50 text-white font-extrabold text-sm transition-colors"
+          >
+            {topupSubmitting ? 'Memproses...' : 'Konfirmasi Isi Saldo'}
+          </button>
+
+          {topups.length > 0 && (
+            <div className="pt-2 border-t border-[#d6ecd8] dark:border-[#243329] space-y-2">
+              <p className="text-xs font-extrabold">Riwayat isi saldo terbaru</p>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-0.5">
+                {[...topups]
+                  .reverse()
+                  .slice(0, 6)
+                  .map((item, idx) => (
+                    <div
+                      key={`${item.t}-${item.n}-${idx}`}
+                      className="rounded-xl bg-[#e9f1e8] dark:bg-[#1a2b1f] px-3 py-2 flex items-center justify-between text-xs"
+                    >
+                      <div>
+                        <p className="font-bold">{item.metode}</p>
+                        <p className="text-[11px] opacity-75">{item.t}</p>
+                      </div>
+                      <span className="font-mono-num font-extrabold text-[#0f7a35] dark:text-[#6ee7a0]">
+                        +{formatRupiah(item.n)}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+        </form>
       </DrawerModal>
 
       {/* Modal: Buku Besar Digital */}

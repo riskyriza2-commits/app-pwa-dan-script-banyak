@@ -49,7 +49,7 @@ export function seedDatabase(): EcotingDB {
         email: 'pengepul@demo.id',
         pass: 'demo123',
         role: 'pengepul',
-        saldo: 0,
+        saldo: 250000,
         bank: 'BRI',
         rek: '0987654321',
         harga: [3500, 1000, 5000, 2000, 1500],
@@ -70,7 +70,7 @@ export function seedDatabase(): EcotingDB {
         email: 'slamet@demo.id',
         pass: 'demo123',
         role: 'pengepul',
-        saldo: 0,
+        saldo: 250000,
         bank: 'DANA',
         rek: '081234567890',
         harga: [3200, 0, 5500, 1800, 0],
@@ -88,6 +88,7 @@ export function seedDatabase(): EcotingDB {
     orders: [],
     session: null,
     wd: [],
+    topups: [],
   };
 }
 
@@ -131,6 +132,7 @@ export function loadDatabase(): EcotingDB {
         });
         if (!Array.isArray(parsed.orders)) parsed.orders = [];
         if (!Array.isArray(parsed.wd)) parsed.wd = [];
+        if (!Array.isArray(parsed.topups)) parsed.topups = [];
         return parsed;
       }
     }

@@ -143,12 +143,18 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
 
         {/* 3 green breakdown bars matching Figma Screenshot 1 Screen 4 */}
         <div className="space-y-2.5">
-          <div className="rounded-xl bg-[#6ea36c] dark:bg-[#234529] text-white px-4 py-3 flex items-center justify-between text-xs font-semibold">
+          <div className="rounded-xl bg-[#6ea36c] dark:bg-[#234529] text-white px-4 py-3 flex items-center justify-between gap-3 text-xs font-semibold">
             <span>Pengepul &amp; Metode</span>
-            <span>
+            <span className="text-right">
               {getUserDisplayName(users, order.to, order.toName)} · {order.metode}
             </span>
           </div>
+          {order.metode === 'Dijemput' && order.alamat && (
+            <div className="rounded-xl bg-[#6ea36c] dark:bg-[#234529] text-white px-4 py-3 flex items-start justify-between gap-3 text-xs font-semibold">
+              <span className="shrink-0">Alamat Jemput</span>
+              <span className="text-right">{order.alamat}</span>
+            </div>
+          )}
           <div className="rounded-xl bg-[#6ea36c] dark:bg-[#234529] text-white px-4 py-3 flex items-center justify-between text-xs font-semibold">
             <span>Berat &amp; Tanggal</span>
             <span className="font-mono-num">

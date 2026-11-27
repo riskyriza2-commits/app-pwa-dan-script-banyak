@@ -1,5 +1,5 @@
 import React from 'react';
-import { Star, Receipt } from 'lucide-react';
+import { Star, Receipt, MapPin } from 'lucide-react';
 import type { Order, User } from '../types/ecoting';
 import { formatRupiah, getUserDisplayName } from '../data/ecotingStore';
 
@@ -67,6 +67,12 @@ export const OrderCard: React.FC<OrderCardProps> = ({
           <p className="text-[11px] text-[#335a39] dark:text-[#8eb096] mt-0.5">
             {order.metode} · {order.tgl}
           </p>
+          {order.metode === 'Dijemput' && order.alamat && (
+            <p className="text-[11px] text-[#264b2c] dark:text-[#a8c7af] mt-0.5 flex items-start gap-1">
+              <MapPin className="w-3 h-3 shrink-0 mt-0.5 text-[#0f7a35] dark:text-[#6ee7a0]" />
+              <span className="line-clamp-2">{order.alamat}</span>
+            </p>
+          )}
           <p className="text-xs font-semibold text-[#102916] dark:text-[#e8f3ec] mt-1">
             {order.status === 'Selesai' && order.total != null ? (
               <span className="font-mono-num font-extrabold">

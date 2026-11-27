@@ -271,6 +271,37 @@
         }
       },
       "required": ["userId", "m", "rek", "n", "t", "createdAt"]
+    },
+    "TopupRecord": {
+      "title": "TopupRecord",
+      "description": "Immutable Eco-Pay balance top-up record created by a pengepul.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "metode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "n": {
+          "type": "number"
+        },
+        "t": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "metode", "n", "t", "createdAt"]
     }
   },
   "firestore": {
@@ -293,6 +324,10 @@
     "/withdrawals/{withdrawalId}": {
       "schema": { "$ref": "#/entities/WithdrawalRecord" },
       "description": "Immutable withdrawal records readable and creatable only by the owning pengumpul."
+    },
+    "/topups/{topupId}": {
+      "schema": { "$ref": "#/entities/TopupRecord" },
+      "description": "Immutable Eco-Pay top-up records readable and creatable only by the owning pengepul."
     }
   }
 }

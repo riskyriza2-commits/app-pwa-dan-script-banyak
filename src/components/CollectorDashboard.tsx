@@ -11,6 +11,7 @@ import {
   Leaf,
   Store,
   User as UserIcon,
+  MapPin,
 } from 'lucide-react';
 import type {
   DepositMethod,
@@ -107,6 +108,7 @@ export const CollectorDashboard: React.FC<CollectorDashboardProps> = ({
   const [weights, setWeights] = useState<Record<number, string>>({});
   const [method, setMethod] = useState<DepositMethod>('Antar sendiri');
   const [pickupAddress, setPickupAddress] = useState('');
+  const [pickupNote, setPickupNote] = useState('');
 
   // Withdraw state
   const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -182,7 +184,10 @@ export const CollectorDashboard: React.FC<CollectorDashboardProps> = ({
     setSelectedPengepulId(pengepul.id);
     setWeights({});
     setMethod(cfg.terimaAntar ? 'Antar sendiri' : 'Dijemput');
-    setPickupAddress(user.alamat || '');
+    setPickupAddress(
+      user.alamat && user.alamat !== 'Tembalang, Semarang' ? user.alamat : '',
+    );
+    setPickupNote('');
     setActiveModal('detailPengepul');
   };
 
@@ -208,7 +213,7 @@ export const CollectorDashboard: React.FC<CollectorDashboardProps> = ({
       return;
     }
     if (method === 'Dijemput' && !pickupAddress.trim()) {
-      onToast('Isi alamat penjemputan');
+      onToast('Ketik alamat penjemputan terlebih dahulu');
       return;
     }
     const pickupFee = selectedDelivery.ongkirJemput;
@@ -221,6 +226,14 @@ export const CollectorDashboard: React.FC<CollectorDashboardProps> = ({
       onToast('Estimasi setoran atau saldo belum cukup untuk ongkir');
       return;
     }
+
+    const combinedAddress =
+      method === 'Dijemput'
+        ? (pickupNote.trim()
+            ? `${pickupAddress.trim()} (${pickupNote.trim()})`
+            : pickupAddress.trim()
+          ).slice(0, 200)
+        : '';
 
     const now = Date.now();
     const today = new Date().toLocaleDateString('id-ID');
@@ -236,7 +249,7 @@ export const CollectorDashboard: React.FC<CollectorDashboardProps> = ({
       hrg: item.price,
       est: item.kg * item.price,
       metode: method,
-      alamat: method === 'Dijemput' ? pickupAddress.trim() : '',
+      alamat: combinedAddress,
       ongkir: idx === 0 && method === 'Dijemput' ? pickupFee : 0,
       status: 'Menunggu',
       tgl: today,
@@ -816,21 +829,67 @@ export const CollectorDashboard: React.FC<CollectorDashboardProps> = ({
             )}
 
             {method === 'Dijemput' && (
-              <div>
-                <label
-                  htmlFor="pickup-addr"
-                  className="block text-xs font-bold mb-1.5"
-                >
-                  Alamat Penjemputan
-                </label>
-                <input
+              <div className="rounded-2xl bg-[#e9f1e8] dark:bg-[#1a2b1f] border border-[#5f8f5b] p-3.5 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label
+                    htmlFor="pickup-addr"
+                    className="inline-flex items-center gap-1.5 text-xs font-extrabold text-[#102916] dark:text-white"
+                  >
+                    <MapPin className="w-4 h-4 text-[#0f7a35] dark:text-[#6ee7a0]" />
+                    <span>Ketik Alamat Penjemputan</span>
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    {user.alamat && (
+                      <button
+                        type="button"
+                        onClick={() => setPickupAddress(user.alamat || '')}
+                        className="rounded-full bg-white dark:bg-[#15211a] border border-[#5f8f5b]/60 px-2.5 py-1 text-[11px] font-bold hover:border-[#0f7a35] transition-colors"
+                      >
+                        Pakai alamat akun
+                      </button>
+                    )}
+                    {pickupAddress && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPickupAddress('');
+                          setPickupNote('');
+                        }}
+                        className="rounded-full bg-white/80 dark:bg-[#15211a] border border-[#5f8f5b]/40 px-2.5 py-1 text-[11px] font-semibold opacity-80 hover:opacity-100"
+                      >
+                        Hapus
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <textarea
                   id="pickup-addr"
-                  type="text"
+                  rows={2}
+                  maxLength={140}
                   value={pickupAddress}
                   onChange={(e) => setPickupAddress(e.target.value)}
-                  placeholder="Kos / gedung, Tembalang"
-                  className="w-full min-h-[44px] rounded-xl bg-[#e9f1e8] dark:bg-[#15211a] border border-[#5f8f5b] px-3.5 py-2.5 text-sm focus:outline-2 focus:outline-[#0f7a35]"
+                  placeholder="Ketik nama jalan, nomor kos/rumah, RT/RW, Tembalang"
+                  className="w-full rounded-xl bg-white dark:bg-[#15211a] border border-[#5f8f5b]/70 px-3.5 py-2.5 text-sm focus:outline-2 focus:outline-[#0f7a35] resize-none"
                 />
+
+                <div>
+                  <label
+                    htmlFor="pickup-note"
+                    className="block text-[11px] font-bold mb-1 opacity-85"
+                  >
+                    Patokan / detail lokasi (opsional)
+                  </label>
+                  <input
+                    id="pickup-note"
+                    type="text"
+                    maxLength={50}
+                    value={pickupNote}
+                    onChange={(e) => setPickupNote(e.target.value)}
+                    placeholder="Contoh: Gerbang hijau, sebelah warung"
+                    className="w-full min-h-[38px] rounded-xl bg-white dark:bg-[#15211a] border border-[#5f8f5b]/70 px-3.5 py-1.5 text-xs focus:outline-2 focus:outline-[#0f7a35]"
+                  />
+                </div>
               </div>
             )}
 

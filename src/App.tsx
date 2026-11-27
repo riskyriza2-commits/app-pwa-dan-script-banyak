@@ -24,6 +24,7 @@ import type {
   Order,
   PengepulRatingRecord,
   Role,
+  TopupRecord,
   User,
   Withdrawal,
 } from './types/ecoting';
@@ -73,6 +74,7 @@ export default function App() {
   const [cloudOrders, setCloudOrders] = useState<Order[]>([]);
   const [cloudRatings, setCloudRatings] = useState<PengepulRatingRecord[]>([]);
   const [cloudWithdrawals, setCloudWithdrawals] = useState<Withdrawal[]>([]);
+  const [cloudTopups, setCloudTopups] = useState<TopupRecord[]>([]);
   const [fatalError, setFatalError] = useState<Error | null>(null);
 
   const [tab, setTab] = useState<TabKey>('home');
@@ -117,7 +119,7 @@ export default function App() {
     | 'panduan'
   >('none');
   const [pengepulModal, setPengepulModal] = useState<
-    'none' | 'kelola' | 'pengiriman' | 'buku' | 'verifikasi'
+    'none' | 'kelola' | 'pengiriman' | 'isiSaldo' | 'buku' | 'verifikasi'
   >('none');
   const [verifyingOrderId, setVerifyingOrderId] = useState<number | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -174,6 +176,7 @@ export default function App() {
         setCloudOrders([]);
         setCloudRatings([]);
         setCloudWithdrawals([]);
+        setCloudTopups([]);
         setProfileLoading(false);
       } else {
         setProfileLoading(true);
@@ -346,6 +349,8 @@ export default function App() {
     );
 
     let unsubWithdrawals: (() => void) | undefined;
+    let unsubTopups: (() => void) | undefined;
+
     if (cloudProfile.role === 'pengumpul') {
       const wdQuery = query(
         collection(db, 'withdrawals'),
@@ -367,13 +372,35 @@ export default function App() {
         },
         (err) => handleSnapshotError(err, OperationType.LIST, 'withdrawals'),
       );
+      setCloudTopups([]);
     } else {
       setCloudWithdrawals([]);
+      const topupsQuery = query(
+        collection(db, 'topups'),
+        where('userId', '==', firebaseUser.uid),
+      );
+      unsubTopups = onSnapshot(
+        topupsQuery,
+        (snap) => {
+          const list: TopupRecord[] = snap.docs.map((docSnap) => {
+            const d = docSnap.data();
+            return {
+              u: String(d.userId || ''),
+              metode: String(d.metode || 'QRIS'),
+              n: Number(d.n) || 0,
+              t: String(d.t || ''),
+            };
+          });
+          setCloudTopups(list);
+        },
+        (err) => handleSnapshotError(err, OperationType.LIST, 'topups'),
+      );
     }
 
     return () => {
       unsubOrders();
       unsubWithdrawals?.();
+      unsubTopups?.();
     };
   }, [authReady, firebaseUser, cloudProfile, handleSnapshotError]);
 
@@ -412,6 +439,13 @@ export default function App() {
         const withdrawn = cloudWithdrawals.reduce((sum, w) => sum + w.n, 0);
         return { ...self, saldo: Math.max(0, earned - withdrawn) };
       }
+      if (self.role === 'pengepul') {
+        const topped = cloudTopups.reduce((sum, t) => sum + t.n, 0);
+        const paidOut = cloudOrders
+          .filter((o) => o.to === self.id && o.status === 'Selesai')
+          .reduce((sum, o) => sum + Math.max(0, (o.total || 0) - o.ongkir), 0);
+        return { ...self, saldo: Math.max(0, topped - paidOut) };
+      }
       return self;
     }
     return demoDb.users.find((u) => u.id === demoDb.session) || null;
@@ -421,6 +455,7 @@ export default function App() {
     activeUsers,
     cloudOrders,
     cloudWithdrawals,
+    cloudTopups,
     demoDb.users,
     demoDb.session,
   ]);
@@ -760,11 +795,61 @@ export default function App() {
     }
   };
 
+  const handleTopupSaldo = async (amount: number, metode: string) => {
+    if (!currentUser) return;
+    const cleanAmount = Math.round(amount);
+    const cleanMetode = (metode || 'QRIS').trim().slice(0, 40) || 'QRIS';
+    const today = new Date().toLocaleDateString('id-ID').slice(0, 30);
+
+    if (!isCloudMode || !firebaseUser) {
+      updateDemoDb((prev) => ({
+        ...prev,
+        users: prev.users.map((u) =>
+          u.id === currentUser.id ? { ...u, saldo: u.saldo + cleanAmount } : u,
+        ),
+        topups: [
+          ...(prev.topups || []),
+          {
+            u: currentUser.id,
+            metode: cleanMetode,
+            n: cleanAmount,
+            t: today,
+          },
+        ],
+      }));
+      showToast(`Saldo Eco-Pay bertambah ${formatRupiah(cleanAmount)}`);
+      return;
+    }
+
+    const topupId = `t_${Date.now()}`;
+    try {
+      await setDoc(doc(db, 'topups', topupId), {
+        userId: firebaseUser.uid,
+        metode: cleanMetode,
+        n: cleanAmount,
+        t: today,
+        createdAt: serverTimestamp(),
+      });
+      showToast(`Saldo Eco-Pay bertambah ${formatRupiah(cleanAmount)}`);
+    } catch (err) {
+      if (isQuotaExceededError(err)) {
+        showToast('Kuota harian database tercapai. Silakan coba lagi besok.');
+        return;
+      }
+      handleFirestoreError(err, OperationType.CREATE, `topups/${topupId}`);
+    }
+  };
+
   const handleApproveOrder = async (orderId: number, finalWeight: number) => {
     const target = activeOrders.find((o) => o.id === orderId);
     if (!target) return;
     const total = finalWeight * getOrderUnitPrice(target);
     const credit = Math.max(0, total - target.ongkir);
+
+    if (currentUser?.role === 'pengepul' && credit > currentUser.saldo) {
+      showToast('Saldo Eco-Pay belum cukup. Silakan isi saldo terlebih dahulu.');
+      return;
+    }
 
     if (!isCloudMode || !firebaseUser) {
       updateDemoDb((prev) => ({
@@ -774,9 +859,13 @@ export default function App() {
             ? { ...o, final: finalWeight, total, status: 'Selesai' }
             : o,
         ),
-        users: prev.users.map((u) =>
-          u.id === target.by ? { ...u, saldo: u.saldo + credit } : u,
-        ),
+        users: prev.users.map((u) => {
+          if (u.id === target.by) return { ...u, saldo: u.saldo + credit };
+          if (u.id === target.to) {
+            return { ...u, saldo: Math.max(0, u.saldo - credit) };
+          }
+          return u;
+        }),
       }));
       showToast('Pembayaran Berhasil');
       return;
@@ -996,6 +1085,11 @@ export default function App() {
                 users={activeUsers}
                 orders={activeOrders}
                 ratings={isCloudMode ? cloudRatings : undefined}
+                topups={
+                  isCloudMode
+                    ? cloudTopups
+                    : (demoDb.topups || []).filter((t) => t.u === currentUser.id)
+                }
                 activeModal={pengepulModal}
                 setActiveModal={setPengepulModal}
                 verifyingOrderId={verifyingOrderId}
@@ -1004,6 +1098,7 @@ export default function App() {
                 onOpenReceipt={(id) => setReceiptOrderId(id)}
                 onSavePrices={handleSavePengepulPrices}
                 onSaveDeliverySettings={handleSaveDeliverySettings}
+                onTopupSaldo={handleTopupSaldo}
                 onApproveOrder={handleApproveOrder}
                 onRejectOrder={handleRejectOrder}
                 onToast={showToast}

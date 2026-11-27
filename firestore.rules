@@ -136,6 +136,17 @@ service cloud.firestore {
         && data.createdAt is timestamp;
     }
 
+    function isValidTopup(data) {
+      return data.keys().hasAll(['userId', 'metode', 'n', 't', 'createdAt'])
+        && data.keys().hasOnly(['userId', 'metode', 'n', 't', 'createdAt'])
+        && isValidId(data.userId)
+        && data.userId == request.auth.uid
+        && data.metode is string && data.metode.size() >= 1 && data.metode.size() <= 40
+        && data.n is number && data.n >= 10000 && data.n <= 100000000
+        && data.t is string && data.t.size() >= 1 && data.t.size() <= 30
+        && data.createdAt is timestamp;
+    }
+
     // --- Collection Rules ---
 
     // Private User Profiles (PII strictly owner-only)
@@ -282,6 +293,18 @@ service cloud.firestore {
         && isValidId(withdrawalId)
         && isValidWithdrawal(incoming())
         && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    // Immutable Eco-Pay Top-ups (pengepul owner-only)
+    match /topups/{topupId} {
+      allow get: if isSignedIn() && isValidId(topupId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isEmailVerified()
+        && isValidId(topupId)
+        && isValidTopup(incoming())
+        && incoming().createdAt == request.time
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'pengepul';
       allow update, delete: if false;
     }
   }
