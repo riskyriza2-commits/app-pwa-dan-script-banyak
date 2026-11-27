@@ -1,0 +1,298 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private user account profile containing PII and role assignment.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "nama": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "role": {
+          "type": "string",
+          "enum": ["pengumpul", "pengepul"]
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 120
+        },
+        "alamat": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "bank": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "rek": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 16,
+          "pattern": "^[0-9]{8,16}$"
+        },
+        "usaha": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "nama", "role", "email", "alamat", "bank", "rek", "createdAt", "updatedAt"]
+    },
+    "PengepulListing": {
+      "title": "PengepulListing",
+      "description": "Public non-PII storefront for registered pengepul including prices and delivery options.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "usaha": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "picName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "area": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "harga": {
+          "type": "array",
+          "description": "Fixed 5-element array of IDR/kg prices for categories 0..4"
+        },
+        "jarak": {
+          "type": "number"
+        },
+        "pengiriman": {
+          "type": "object",
+          "description": "Delivery options map (terimaAntar, terimaJemput, ongkirJemput, optional catatan)"
+        },
+        "rs": {
+          "type": "number"
+        },
+        "rn": {
+          "type": "number"
+        },
+        "isPublic": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["ownerId", "usaha", "picName", "area", "harga", "jarak", "pengiriman", "rs", "rn", "isPublic", "createdAt", "updatedAt"]
+    },
+    "PengepulRating": {
+      "title": "PengepulRating",
+      "description": "Public star rating attached to a completed order for a pengepul.",
+      "type": "object",
+      "properties": {
+        "pengepulId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "orderId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "by": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "rate": {
+          "type": "integer"
+        },
+        "isPublic": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["pengepulId", "orderId", "by", "rate", "isPublic", "createdAt"]
+    },
+    "OrderRecord": {
+      "title": "OrderRecord",
+      "description": "Waste deposit transaction between a pengumpul and a pengepul.",
+      "type": "object",
+      "properties": {
+        "orderNum": {
+          "type": "integer"
+        },
+        "by": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "byName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "toName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "jenis": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "jid": {
+          "type": "integer"
+        },
+        "berat": {
+          "type": "number"
+        },
+        "hrg": {
+          "type": "number"
+        },
+        "est": {
+          "type": "number"
+        },
+        "metode": {
+          "type": "string",
+          "enum": ["Antar sendiri", "Dijemput"]
+        },
+        "alamat": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "ongkir": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Menunggu", "Selesai", "Ditolak"]
+        },
+        "tgl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "final": {
+          "type": "number"
+        },
+        "total": {
+          "type": "number"
+        },
+        "rate": {
+          "type": "integer"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["orderNum", "by", "byName", "to", "toName", "jenis", "jid", "berat", "hrg", "est", "metode", "alamat", "ongkir", "status", "tgl", "createdAt", "updatedAt"]
+    },
+    "WithdrawalRecord": {
+      "title": "WithdrawalRecord",
+      "description": "Immutable withdrawal request created by a pengumpul.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "m": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "rek": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 16,
+          "pattern": "^[0-9]{8,16}$"
+        },
+        "n": {
+          "type": "number"
+        },
+        "t": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "m", "rek", "n", "t", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user profile containing PII (email, alamat, bank, rek) and immutable role."
+    },
+    "/pengepul/{pengepulId}": {
+      "schema": { "$ref": "#/entities/PengepulListing" },
+      "description": "Public directory of active pengepul storefronts, prices, and delivery preferences."
+    },
+    "/ratings/{ratingId}": {
+      "schema": { "$ref": "#/entities/PengepulRating" },
+      "description": "Verified star ratings submitted by pengumpul for completed orders."
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/OrderRecord" },
+      "description": "Waste deposit transactions shared exclusively between creator (by) and recipient pengepul (to)."
+    },
+    "/withdrawals/{withdrawalId}": {
+      "schema": { "$ref": "#/entities/WithdrawalRecord" },
+      "description": "Immutable withdrawal records readable and creatable only by the owning pengumpul."
+    }
+  }
+}

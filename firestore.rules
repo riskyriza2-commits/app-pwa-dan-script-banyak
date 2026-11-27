@@ -1,0 +1,288 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Helpers ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // --- Entity Validation Blueprints (synced with firebase-blueprint.json) ---
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'nama', 'role', 'email', 'alamat', 'bank', 'rek', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'nama', 'role', 'email', 'alamat', 'bank', 'rek', 'usaha', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.nama is string && data.nama.size() >= 1 && data.nama.size() <= 80
+        && data.role in ['pengumpul', 'pengepul']
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 120
+        && data.alamat is string && data.alamat.size() <= 200
+        && data.bank is string && data.bank.size() <= 40
+        && data.rek is string && data.rek.size() >= 8 && data.rek.size() <= 16 && data.rek.matches('^[0-9]{8,16}$')
+        && (!('usaha' in data) || (data.usaha is string && data.usaha.size() <= 80))
+        && (data.role != 'pengepul' || ('usaha' in data && data.usaha.size() >= 1))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDelivery(cfg) {
+      return cfg is map
+        && cfg.keys().hasAll(['terimaAntar', 'terimaJemput', 'ongkirJemput'])
+        && cfg.keys().hasOnly(['terimaAntar', 'terimaJemput', 'ongkirJemput', 'catatan'])
+        && cfg.terimaAntar is bool
+        && cfg.terimaJemput is bool
+        && (cfg.terimaAntar || cfg.terimaJemput)
+        && cfg.ongkirJemput is number && cfg.ongkirJemput >= 0 && cfg.ongkirJemput <= 1000000
+        && (!('catatan' in cfg) || (cfg.catatan is string && cfg.catatan.size() <= 140));
+    }
+
+    function isValidPengepul(data) {
+      return data.keys().hasAll(['ownerId', 'usaha', 'picName', 'area', 'harga', 'jarak', 'pengiriman', 'rs', 'rn', 'isPublic', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'usaha', 'picName', 'area', 'harga', 'jarak', 'pengiriman', 'rs', 'rn', 'isPublic', 'createdAt', 'updatedAt'])
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && data.usaha is string && data.usaha.size() >= 1 && data.usaha.size() <= 80
+        && data.picName is string && data.picName.size() >= 1 && data.picName.size() <= 80
+        && data.area is string && data.area.size() >= 1 && data.area.size() <= 100
+        && data.harga is list && data.harga.size() == 5
+        && data.harga[0] is number && data.harga[0] >= 0 && data.harga[0] <= 1000000
+        && data.harga[1] is number && data.harga[1] >= 0 && data.harga[1] <= 1000000
+        && data.harga[2] is number && data.harga[2] >= 0 && data.harga[2] <= 1000000
+        && data.harga[3] is number && data.harga[3] >= 0 && data.harga[3] <= 1000000
+        && data.harga[4] is number && data.harga[4] >= 0 && data.harga[4] <= 1000000
+        && data.jarak is number && data.jarak >= 0 && data.jarak <= 500
+        && isValidDelivery(data.pengiriman)
+        && data.rs is number && data.rs >= 0 && data.rs <= 5
+        && data.rn is number && data.rn >= 0
+        && data.isPublic is bool && data.isPublic == true
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidRating(data) {
+      return data.keys().hasAll(['pengepulId', 'orderId', 'by', 'rate', 'isPublic', 'createdAt'])
+        && data.keys().hasOnly(['pengepulId', 'orderId', 'by', 'rate', 'isPublic', 'createdAt'])
+        && isValidId(data.pengepulId)
+        && isValidId(data.orderId)
+        && isValidId(data.by)
+        && data.by == request.auth.uid
+        && data.rate is int && data.rate >= 1 && data.rate <= 5
+        && data.isPublic is bool && data.isPublic == true
+        && data.createdAt is timestamp;
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll(['orderNum', 'by', 'byName', 'to', 'toName', 'jenis', 'jid', 'berat', 'hrg', 'est', 'metode', 'alamat', 'ongkir', 'status', 'tgl', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['orderNum', 'by', 'byName', 'to', 'toName', 'jenis', 'jid', 'berat', 'hrg', 'est', 'metode', 'alamat', 'ongkir', 'status', 'tgl', 'final', 'total', 'rate', 'createdAt', 'updatedAt'])
+        && data.orderNum is int && data.orderNum > 0
+        && isValidId(data.by)
+        && data.byName is string && data.byName.size() >= 1 && data.byName.size() <= 80
+        && isValidId(data.to)
+        && data.toName is string && data.toName.size() >= 1 && data.toName.size() <= 80
+        && data.by != data.to
+        && data.jenis is string && data.jenis.size() >= 1 && data.jenis.size() <= 40
+        && data.jid is int && data.jid >= 0 && data.jid <= 4
+        && data.berat is number && data.berat > 0 && data.berat <= 100000
+        && data.hrg is number && data.hrg > 0 && data.hrg <= 1000000
+        && data.est is number && data.est >= 0
+        && data.metode in ['Antar sendiri', 'Dijemput']
+        && data.alamat is string && data.alamat.size() <= 200
+        && (data.metode != 'Dijemput' || data.alamat.size() >= 1)
+        && data.ongkir is number && data.ongkir >= 0 && data.ongkir <= 1000000
+        && (data.metode != 'Antar sendiri' || data.ongkir == 0)
+        && data.status in ['Menunggu', 'Selesai', 'Ditolak']
+        && data.tgl is string && data.tgl.size() >= 1 && data.tgl.size() <= 30
+        && (!('final' in data) || (data.final is number && data.final > 0 && data.final <= 100000))
+        && (!('total' in data) || (data.total is number && data.total >= 0))
+        && (!('rate' in data) || (data.rate is int && data.rate >= 1 && data.rate <= 5))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidWithdrawal(data) {
+      return data.keys().hasAll(['userId', 'm', 'rek', 'n', 't', 'createdAt'])
+        && data.keys().hasOnly(['userId', 'm', 'rek', 'n', 't', 'createdAt'])
+        && isValidId(data.userId)
+        && data.userId == request.auth.uid
+        && data.m is string && data.m.size() >= 1 && data.m.size() <= 40
+        && data.rek is string && data.rek.size() >= 8 && data.rek.size() <= 16 && data.rek.matches('^[0-9]{8,16}$')
+        && data.n is number && data.n >= 10000 && data.n <= 100000000
+        && data.t is string && data.t.size() >= 1 && data.t.size() <= 30
+        && data.createdAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+
+    // Private User Profiles (PII strictly owner-only)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if isSignedIn() && existing().uid == request.auth.uid;
+      allow create: if isEmailVerified()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUser(incoming())
+        && incoming().email == request.auth.token.email
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isEmailVerified()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUser(incoming())
+        && incoming().uid == existing().uid
+        && incoming().role == existing().role
+        && incoming().email == existing().email
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['nama', 'alamat', 'bank', 'rek', 'usaha', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    // Public Pengepul Directory (no PII)
+    match /pengepul/{pengepulId} {
+      allow get: if isSignedIn() && isValidId(pengepulId);
+      allow list: if isSignedIn() && existing().isPublic == true;
+      allow create: if isEmailVerified()
+        && isValidId(pengepulId)
+        && isOwner(pengepulId)
+        && isValidPengepul(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'pengepul';
+      allow update: if isEmailVerified()
+        && isValidId(pengepulId)
+        && isOwner(pengepulId)
+        && isValidPengepul(incoming())
+        && incoming().ownerId == existing().ownerId
+        && (!('isPublic' in existing()) || incoming().isPublic == existing().isPublic)
+        && incoming().rs == existing().rs
+        && incoming().rn == existing().rn
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['usaha', 'picName', 'area', 'harga', 'jarak', 'pengiriman', 'isPublic', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    // Public Verified Order Ratings (no PII)
+    match /ratings/{ratingId} {
+      allow get: if isSignedIn() && isValidId(ratingId);
+      allow list: if isSignedIn() && existing().isPublic == true;
+      allow create: if isEmailVerified()
+        && isValidId(ratingId)
+        && isValidRating(incoming())
+        && incoming().orderId == ratingId
+        && incoming().createdAt == request.time
+        && exists(/databases/$(database)/documents/orders/$(ratingId))
+        && get(/databases/$(database)/documents/orders/$(ratingId)).data.by == request.auth.uid
+        && get(/databases/$(database)/documents/orders/$(ratingId)).data.to == incoming().pengepulId
+        && get(/databases/$(database)/documents/orders/$(ratingId)).data.status == 'Selesai';
+      allow update, delete: if false;
+    }
+
+    // Waste Deposit Orders (private to buyer & seller)
+    match /orders/{orderId} {
+      allow get: if isSignedIn()
+        && isValidId(orderId)
+        && (existing().by == request.auth.uid || existing().to == request.auth.uid);
+      allow list: if isSignedIn()
+        && (existing().by == request.auth.uid || existing().to == request.auth.uid);
+      allow create: if isEmailVerified()
+        && isValidId(orderId)
+        && isValidOrder(incoming())
+        && incoming().by == request.auth.uid
+        && incoming().status == 'Menunggu'
+        && !('final' in incoming())
+        && !('total' in incoming())
+        && !('rate' in incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/pengepul/$(incoming().to));
+      allow update: if isEmailVerified()
+        && isValidId(orderId)
+        && isValidOrder(incoming())
+        && incoming().orderNum == existing().orderNum
+        && incoming().by == existing().by
+        && incoming().byName == existing().byName
+        && incoming().to == existing().to
+        && incoming().toName == existing().toName
+        && incoming().jenis == existing().jenis
+        && incoming().jid == existing().jid
+        && incoming().berat == existing().berat
+        && incoming().hrg == existing().hrg
+        && incoming().est == existing().est
+        && incoming().metode == existing().metode
+        && incoming().alamat == existing().alamat
+        && incoming().ongkir == existing().ongkir
+        && incoming().tgl == existing().tgl
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action 1: Pengepul approves and weighs pending order
+          (
+            existing().to == request.auth.uid
+            && existing().status == 'Menunggu'
+            && incoming().status == 'Selesai'
+            && 'final' in incoming()
+            && 'total' in incoming()
+            && !('rate' in incoming())
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'final', 'total', 'updatedAt'])
+          ) ||
+          // Action 2: Pengepul rejects pending order
+          (
+            existing().to == request.auth.uid
+            && existing().status == 'Menunggu'
+            && incoming().status == 'Ditolak'
+            && !('final' in incoming())
+            && !('total' in incoming())
+            && !('rate' in incoming())
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          ) ||
+          // Action 3: Pengumpul rates completed order once
+          (
+            existing().by == request.auth.uid
+            && existing().status == 'Selesai'
+            && incoming().status == 'Selesai'
+            && !('rate' in existing())
+            && 'rate' in incoming()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['rate', 'updatedAt'])
+          )
+        );
+      allow delete: if false;
+    }
+
+    // Immutable Withdrawals (owner-only)
+    match /withdrawals/{withdrawalId} {
+      allow get: if isSignedIn() && isValidId(withdrawalId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isEmailVerified()
+        && isValidId(withdrawalId)
+        && isValidWithdrawal(incoming())
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+  }
+}

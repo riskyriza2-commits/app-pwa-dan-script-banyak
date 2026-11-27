@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="ecoGrad" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0f7a35"/>
+      <stop offset="100%" stop-color="#27b04f"/>
+    </linearGradient>
+    <linearGradient id="goldAccent" x1="160" y1="140" x2="360" y2="380" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffe27a"/>
+      <stop offset="100%" stop-color="#f5b800"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#ecoGrad)"/>
+  <!-- Outer circular recycling arc -->
+  <path d="M256 108C174.26 108 108 174.26 108 256C108 312.8 140.02 362.14 187.1 386.94" stroke="#ffffff" stroke-width="28" stroke-linecap="round"/>
+  <path d="M256 404C337.74 404 404 337.74 404 256C404 199.2 371.98 149.86 324.9 125.06" stroke="#ffffff" stroke-width="28" stroke-linecap="round"/>
+  <!-- Directional arrowheads -->
+  <path d="M236 74L282 108L236 142" stroke="#ffffff" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M276 438L230 404L276 370" stroke="#ffffff" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Stylized leaf / coin center mark -->
+  <path d="M256 176C256 176 324 196 324 256C324 294 294 328 256 328C218 328 188 294 188 256C188 214 224 188 256 176Z" fill="url(#goldAccent)"/>
+  <path d="M256 206V312M256 260L288 236" stroke="#06381a" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

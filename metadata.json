@@ -1,0 +1,8 @@
+{
+  "name": "ECO-TING — Bank Sampah Digital",
+  "description": "Aplikasi PWA setor sampah, kelola saldo, dan buku besar digital untuk pengumpul dan pengepul.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
